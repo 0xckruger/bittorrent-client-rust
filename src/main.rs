@@ -7,7 +7,6 @@ use serde_json::Value::Array;
 // use serde_bencode
 
 fn decode_bencoded_structure(encoded_value: &str) -> Value {
-    println!("{}", encoded_value);
     if encoded_value.chars().next().unwrap() == 'l' {
         let mut i = 1;
         let mut list: Value = Array(vec![]);
