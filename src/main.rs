@@ -11,6 +11,11 @@ fn decode_bencoded_structure(encoded_value: &str) -> Value {
         if encoded_value.chars().nth(1).unwrap() == 'l' {
             return Array(vec![decode_bencoded_structure(&encoded_value[1..encoded_value.len()-1])]);
         }
+
+        if encoded_value == "le" {
+            return Array(vec![]);
+        }
+
         let mut list: Value = Array(vec![]);
         let mut i = 1;
         while i < encoded_value.len() {
