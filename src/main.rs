@@ -8,21 +8,24 @@ use serde_json::Value::Array;
 
 fn decode_bencoded_structure(encoded_value: &str) -> Value {
     if encoded_value.chars().next().unwrap() == 'l' {
-        let mut i = 1;
-        let mut list: Value = Array(vec![]);
-        while i < encoded_value.len() - 1 {
-            let value_index = decode_bencoded_value(&encoded_value[i..encoded_value.len()]);
-            list.as_array_mut().expect("Not an array").push(value_index.0);
-            i += value_index.1 as usize;
+        if encoded_value.chars().nth(1).unwrap() == 'l' {
+            return Array(vec![decode_bencoded_structure(&encoded_value[1..encoded_value.len()-1])]);
         }
-        list
-    } else {
-        let value_index = decode_bencoded_value(encoded_value);
-        value_index.0
-    }
+        let mut list: Value = Array(vec![]);
+        let mut i = 1;
+        while i < encoded_value.len() {
+            let value = decode_bencoded_structure(&encoded_value[i..encoded_value.len()]);
+            i += value.to_string().len();
+            i += 2;
+            list.as_array_mut().expect("Not an array").push(value);
+            }
+        return list;
+        }
+    decode_bencoded_value(encoded_value)
 }
+
 #[allow(dead_code)]
-fn decode_bencoded_value(encoded_value: &str) -> (Value, i64) {
+fn decode_bencoded_value(encoded_value: &str) -> Value {
     // If encoded_value starts with a digit, it's a string
     if encoded_value.chars().next().unwrap().is_digit(10) {
         // Example: "5:hello" -> "hello"
@@ -30,14 +33,14 @@ fn decode_bencoded_value(encoded_value: &str) -> (Value, i64) {
         let number_string = &encoded_value[..colon_index];
         let number = number_string.parse::<i64>().unwrap();
         let string = &encoded_value[colon_index + 1..colon_index + 1 + number as usize];
-        return (Value::String(string.to_string()), number + 2);
+        return Value::String(string.to_string())
     }
     // if encoded_value starts with an i and ends in e it's a number
     else if encoded_value.chars().next().unwrap() == 'i' {
         let e_index = encoded_value.find('e').unwrap();
         let integer_string = &encoded_value[1..e_index];
         let integer = integer_string.parse::<i64>().unwrap();
-        return (Value::Number(Number::from(integer)), (integer_string.len() + 2) as i64);
+        return Value::Number(Number::from(integer))
     } else {
         panic!("Unhandled encoded value: {}", encoded_value)
     }
