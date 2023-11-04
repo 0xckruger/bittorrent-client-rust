@@ -2,8 +2,9 @@ use serde_json;
 use std::env;
 use std::iter::Peekable;
 use std::str::Chars;
-use serde_json::{Value};
+use serde_json::{Map, Value};
 use serde_json::Value::Array;
+use serde_json::Value::Object;
 
 fn decode_bencoded_structure_new(encoded_value: &str) -> Result<Value, &'static str> {
     let mut chars = encoded_value.chars().peekable();
@@ -25,6 +26,7 @@ fn parse_bencoded_values(chars: &mut Peekable<Chars>) -> Result<Value, &'static 
     match chars.peek() {
         Some('i') => parse_bencoded_number(chars),
         Some('l') => parse_bencoded_list(chars),
+        Some('d') => parse_bencoded_map(chars),
         _ => Err("Unable to parse bencoded values"),
     }
 }
@@ -93,6 +95,41 @@ fn parse_bencoded_list(chars: &mut Peekable<Chars>) -> Result<Value, &'static st
         }
     }
     Err("Unclosed list")
+}
+
+fn parse_bencoded_map(chars: &mut Peekable<Chars>) -> Result<Value, &'static str> {
+    let mut map: Map<String, Value> = Map::new();
+
+    chars.next(); // d
+
+    while let Some(c) = chars.peek() {
+        match c {
+            'e' => {
+                chars.next(); // e
+                return Ok(Object(map))
+            }
+            _ => {
+                let hopeful_key = parse_bencoded_values(chars);
+                match hopeful_key {
+                    Ok(value) => {
+                        match value {
+                            Value::String(s) => {
+                                let value = parse_bencoded_values(chars);
+                                map.insert(s, value.unwrap());
+                            }
+                            _ => {
+                                return Err("Key wasn't a string!");
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err("Key parsing error occurred");
+                    }
+                }
+            }
+        }
+    }
+    Err("Unclosed map")
 }
 
 // Usage: your_bittorrent.sh decode "<encoded_value>"
