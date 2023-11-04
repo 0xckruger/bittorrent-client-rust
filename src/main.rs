@@ -1,5 +1,5 @@
 use serde_json;
-use std::env;
+use std::{env, fs};
 use std::iter::Peekable;
 use std::str::Chars;
 use serde_json::{Map, Value};
@@ -132,20 +132,31 @@ fn parse_bencoded_map(chars: &mut Peekable<Chars>) -> Result<Value, &'static str
     Err("Unclosed map")
 }
 
+fn read_torrent_file(bytes: Vec<u8>) -> Result<Value, &'static str> {
+    unimplemented!("Not done yet");
+}
+
 // Usage: your_bittorrent.sh decode "<encoded_value>"
 fn main() {
     let args: Vec<String> = env::args().collect();
     let command = &args[1];
 
     if command == "decode" {
-        // You can use print statements as follows for debugging, they'll be visible when running tests.
-        //println!("Logs from your program will appear here!");
-
-        // Uncomment this block to pass the first stage
         let encoded_value = &args[2];
         let decoded_value = decode_bencoded_structure_new(encoded_value);
         println!("{}", decoded_value.unwrap().to_string());
+    } else if command == "info" {
+        let file_name = &args[2];
+        if fs::metadata(file_name).is_ok() {
+            if let Ok(bytes) = fs::read(file_name) {
+                read_torrent_file(bytes).expect("Couldn't parse torrent file");
+            } else {
+                panic!("Couldn't read the file")
+            }
+        } else {
+            panic!("File does not exist")
+        }
     } else {
-        println!("unknown command: {}", args[1])
+        panic!("unsupported action")
     }
 }
