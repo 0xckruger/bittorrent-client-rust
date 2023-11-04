@@ -13,6 +13,18 @@ fn decode_bencoded_structure_new(encoded_value: &str) -> Result<serde_json::Valu
 fn parse_bencoded_values(chars: &mut Peekable<Chars>) -> Result<Value, &'static str> {
     //println!("matching: {:?}", chars);
     let mut chars_peekable = chars.clone().peekable();
+
+    let num_str: String = chars
+        .clone()
+        .take_while(|c| c.is_digit(10))
+        .collect();
+    //println!("{}", num_str);
+    if !num_str.is_empty() {
+        if let Ok(num) = num_str.parse() {
+            return parse_bencoded_string(chars, num);
+        }
+    }
+
     match chars_peekable.peek() {
         Some('i') => parse_bencoded_number(chars),
         Some('l') => parse_bencoded_list(chars),
@@ -54,11 +66,20 @@ fn parse_bencoded_number(chars: &mut Peekable<Chars>) -> Result<Value, &'static 
 
 fn parse_bencoded_string(chars: &mut Peekable<Chars>, length: usize) -> Result<Value, &'static str> {
     //println!("{:?}", chars);
-    chars.next(); // number
-    chars.next(); // :
+    while let Some(c) = chars.next() {
+        match c {
+            ':' => {
+                let data: String = chars.take(length).collect();
+                return Ok(Value::String(data));
+            }
+            _ => {
+                //println!("{:?}", chars);
+            }
+        }
+    }
 
-    let data: String = chars.take(length).collect();
-    Ok(Value::String(data))
+    Err("Bad string")
+
 }
 
 fn parse_bencoded_list(chars: &mut Peekable<Chars>) -> Result<Value, &'static str> {
