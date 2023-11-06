@@ -2,48 +2,50 @@ use serde_json;
 use std::{env, fs};
 use std::iter::Peekable;
 use std::str::Chars;
+use std::vec::IntoIter;
 use serde_json::{Map, Value};
 use serde_json::Value::Array;
 use serde_json::Value::Object;
 
-fn decode_bencoded_structure_new(encoded_value: &str) -> Result<Value, &'static str> {
-    let mut chars = encoded_value.chars().peekable();
-    parse_bencoded_values(&mut chars)
+fn decode_bencoded_structure_new(encoded_value: Vec<u8>) -> Result<Value, &'static str> {
+    let mut bytes = encoded_value.into_iter().peekable();
+    parse_bencoded_values(&mut bytes)
 }
 
-fn parse_bencoded_values(chars: &mut Peekable<Chars>) -> Result<Value, &'static str> {
-    let num_str: String = chars
+fn parse_bencoded_values(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'static str> {
+    let num_str: String = bytes
         .clone()
-        .take_while(|c| c.is_digit(10))
+        .take_while(|c| (b'0'..=b'9').contains(&c))
+        .map(|c| c as char)
         .collect();
 
     if !num_str.is_empty() {
-        if let Ok(num) = num_str.parse() {
-            return parse_bencoded_string(chars, num);
+        if let Ok(num) = num_str.parse::<i64>() {
+            return parse_bencoded_string(bytes, num as usize);
         }
     }
 
-    match chars.peek() {
-        Some('i') => parse_bencoded_number(chars),
-        Some('l') => parse_bencoded_list(chars),
-        Some('d') => parse_bencoded_map(chars),
+    match bytes.peek() {
+        Some(&b'i') => parse_bencoded_number(bytes),
+        Some(&b'l') => parse_bencoded_list(bytes),
+        Some(&b'd') => parse_bencoded_map(bytes),
         _ => Err("Unable to parse bencoded values"),
     }
 }
 
-fn parse_bencoded_number(chars: &mut Peekable<Chars>) -> Result<Value, &'static str> {
+fn parse_bencoded_number(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'static str> {
     let mut number = String::new();
     let mut is_float = false;
 
-    chars.next(); // i
+    bytes.next(); // i
 
-    while let Some(c) = chars.next() {
+    while let Some(c) = bytes.next() {
         match c {
-            '.' => {
+            b'.' => {
                 is_float = true;
-                number.push(c);
+                number.push(c as char);
             }
-            'e' => {
+            b'e' => {
                 if is_float {
                     if let Ok(float_val) = number.parse::<f64>() {
                         return Ok(Value::Number(serde_json::Number::from_f64(float_val).unwrap()));
@@ -55,66 +57,62 @@ fn parse_bencoded_number(chars: &mut Peekable<Chars>) -> Result<Value, &'static 
                 }
                 return Err("Invalid number");
             }
-            _ => number.push(c),
+            _ => number.push(c as char),
         }
     }
     Err("Unclosed number")
 }
 
-fn parse_bencoded_string(chars: &mut Peekable<Chars>, length: usize) -> Result<Value, &'static str> {
-    while let Some(c) = chars.next() {
-        match c {
-            ':' => {
-                let data: String = chars.take(length).collect();
-                return Ok(Value::String(data));
-            }
-            _ => {
-                continue;
-            }
-        }
+fn parse_bencoded_string(bytes: &mut Peekable<IntoIter<u8>>, length: usize) -> Result<Value, &'static str> {
+    let data: Vec<u8> = bytes.clone().take(length).collect();
+    if data.len() == length {
+        let string_data = String::from_utf8(data.clone());
+
+        return match string_data {
+            Ok(s) => Ok(Value::String(s)),
+            Err(_) => Ok(Value::from(data)),
+        };
     }
-
     Err("Bad string")
-
 }
 
-fn parse_bencoded_list(chars: &mut Peekable<Chars>) -> Result<Value, &'static str> {
+fn parse_bencoded_list(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'static str> {
     let mut list = Vec::new();
 
-    chars.next(); // l
+    bytes.next(); // l
 
-    while let Some(c) = chars.peek() {
+    while let Some(c) = bytes.peek() {
         match c {
-            'e' => {
-                chars.next(); // e
+            b'e' => {
+                bytes.next(); // e
                 return Ok(Array(list))
             }
             _ => {
-                list.push(parse_bencoded_values(chars)?);
+                list.push(parse_bencoded_values(bytes)?);
             }
         }
     }
     Err("Unclosed list")
 }
 
-fn parse_bencoded_map(chars: &mut Peekable<Chars>) -> Result<Value, &'static str> {
+fn parse_bencoded_map(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'static str> {
     let mut map: Map<String, Value> = Map::new();
 
-    chars.next(); // d
+    bytes.next(); // d
 
-    while let Some(c) = chars.peek() {
+    while let Some(c) = bytes.peek() {
         match c {
-            'e' => {
-                chars.next(); // e
+            b'e' => {
+                bytes.next(); // e
                 return Ok(Object(map))
             }
             _ => {
-                let hopeful_key = parse_bencoded_values(chars);
+                let hopeful_key = parse_bencoded_values(bytes);
                 match hopeful_key {
                     Ok(value) => {
                         match value {
                             Value::String(s) => {
-                                let value = parse_bencoded_values(chars);
+                                let value = parse_bencoded_values(bytes);
                                 map.insert(s, value.unwrap());
                             }
                             _ => {
@@ -143,7 +141,8 @@ fn main() {
 
     if command == "decode" {
         let encoded_value = &args[2];
-        let decoded_value = decode_bencoded_structure_new(encoded_value);
+        let encoded_value_bytes = Vec::from(encoded_value.as_bytes());
+        let decoded_value = decode_bencoded_structure_new(encoded_value_bytes);
         println!("{}", decoded_value.unwrap().to_string());
     } else if command == "info" {
         let file_name = &args[2];
