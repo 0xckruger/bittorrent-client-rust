@@ -1,13 +1,14 @@
 use serde_json;
 use std::{env, fs};
+use std::fs::read;
 use std::iter::Peekable;
-use std::str::Chars;
 use std::vec::IntoIter;
 use serde_json::{Map, Value};
 use serde_json::Value::Array;
 use serde_json::Value::Object;
+use base64::{engine::general_purpose, Engine as _};
 
-fn decode_bencoded_structure_new(encoded_value: Vec<u8>) -> Result<Value, &'static str> {
+fn decode_bencoded_structure(encoded_value: Vec<u8>) -> Result<Value, &'static str> {
     let mut bytes = encoded_value.into_iter().peekable();
     parse_bencoded_values(&mut bytes)
 }
@@ -64,14 +65,20 @@ fn parse_bencoded_number(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'
 }
 
 fn parse_bencoded_string(bytes: &mut Peekable<IntoIter<u8>>, length: usize) -> Result<Value, &'static str> {
-    let data: Vec<u8> = bytes.clone().take(length).collect();
-    if data.len() == length {
-        let string_data = String::from_utf8(data.clone());
-
-        return match string_data {
-            Ok(s) => Ok(Value::String(s)),
-            Err(_) => Ok(Value::from(data)),
-        };
+    while let Some(c) = bytes.next() {
+        match c {
+            b':' => {
+                let data: Vec<u8> = bytes.take(length).collect();
+                return if let Ok(utf8_string) = std::str::from_utf8(&data) {
+                    Ok(Value::String(utf8_string.parse().unwrap()))
+                } else {
+                    Ok(Value::String(general_purpose::STANDARD.encode(&data)))
+                }
+            }
+            _ => {
+                continue;
+            }
+        }
     }
     Err("Bad string")
 }
@@ -130,11 +137,25 @@ fn parse_bencoded_map(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'sta
     Err("Unclosed map")
 }
 
-fn read_torrent_file(bytes: Vec<u8>) -> Result<Value, &'static str> {
-    unimplemented!("Not done yet");
+fn read_torrent_file(bytes: Vec<u8>) -> () {
+    let bytes_len = bytes.len();
+    let parsed_file = decode_bencoded_structure(bytes);
+    match parsed_file {
+        Ok(file) => {
+            println!("Tracker URL: {}", file.as_object()
+                .expect("Unable to convert file to object")
+                .get("announce")
+                .expect("Announce not found in parsed file")
+                .as_str()
+                .unwrap());
+        }
+        Err(_) => {
+            panic!("Couldn't parse the torrent file")
+        }
+    }
+    println!("Length: {}", bytes_len);
 }
 
-// Usage: your_bittorrent.sh decode "<encoded_value>"
 fn main() {
     let args: Vec<String> = env::args().collect();
     let command = &args[1];
@@ -142,13 +163,13 @@ fn main() {
     if command == "decode" {
         let encoded_value = &args[2];
         let encoded_value_bytes = Vec::from(encoded_value.as_bytes());
-        let decoded_value = decode_bencoded_structure_new(encoded_value_bytes);
+        let decoded_value = decode_bencoded_structure(encoded_value_bytes);
         println!("{}", decoded_value.unwrap().to_string());
     } else if command == "info" {
         let file_name = &args[2];
         if fs::metadata(file_name).is_ok() {
-            if let Ok(bytes) = fs::read(file_name) {
-                read_torrent_file(bytes).expect("Couldn't parse torrent file");
+            if let Ok(bytes) = read(file_name) {
+                read_torrent_file(bytes)
             } else {
                 panic!("Couldn't read the file")
             }
