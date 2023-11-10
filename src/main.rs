@@ -155,8 +155,8 @@ fn read_torrent_file(bytes: Vec<u8>) -> () {
                 .as_object()
                 .expect("Unable to convert info to object")
                 .get("length")
-                .expect("Length not found in info")
-                .as_str()
+                .expect("Length not found")
+                .as_i64()
                 .unwrap());
         }
         Err(_) => {
