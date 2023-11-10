@@ -148,12 +148,22 @@ fn read_torrent_file(bytes: Vec<u8>) -> () {
                 .expect("Announce not found in parsed file")
                 .as_str()
                 .unwrap());
+
+            println!("Length: {}", file.as_object()
+                .expect("Unable to convert file to object")
+                .get("info")
+                .expect("Info not found")
+                .as_object()
+                .expect("Unable to convert info to object")
+                .get("length")
+                .expect("Length not found in info")
+                .as_str()
+                .unwrap());
         }
         Err(_) => {
             panic!("Couldn't parse the torrent file")
         }
     }
-    println!("Length: {}", bytes_len);
 }
 
 fn main() {
