@@ -138,7 +138,6 @@ fn parse_bencoded_map(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'sta
 }
 
 fn read_torrent_file(bytes: Vec<u8>) -> () {
-    let bytes_len = bytes.len();
     let parsed_file = decode_bencoded_structure(bytes);
     match parsed_file {
         Ok(file) => {
