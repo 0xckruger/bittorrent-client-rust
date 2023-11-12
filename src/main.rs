@@ -1,5 +1,6 @@
 use serde_json;
 use std::{env, fs};
+use std::collections::HashMap;
 use std::fs::read;
 use std::iter::Peekable;
 use std::vec::IntoIter;
@@ -7,6 +8,8 @@ use serde_json::{Map, Value};
 use serde_json::Value::Array;
 use serde_json::Value::Object;
 use base64::{engine::general_purpose, Engine as _};
+use sha1::{Sha1, Digest};
+
 
 fn decode_bencoded_structure(encoded_value: Vec<u8>) -> Result<Value, &'static str> {
     let mut bytes = encoded_value.into_iter().peekable();
@@ -137,6 +140,34 @@ fn parse_bencoded_map(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'sta
     Err("Unclosed map")
 }
 
+fn hash_info(info: &Map<String, Value>) -> String {
+
+    let length = info.get("length").expect("Length not present").as_i64().unwrap();
+    let name = info.get("name").expect("Name not present").as_str().unwrap();
+    let piece_length = info.get("piece length").expect("Piece length not present").as_i64().unwrap();
+    let pieces_base64 = info.get("pieces").expect("Pieces not present").as_str().unwrap();
+    let pieces_bytes = general_purpose::STANDARD.decode(pieces_base64).expect("Can't decode pieces");
+
+    let mut info_with_bytes: HashMap<String, Value> = HashMap::new();
+    info_with_bytes.insert(String::from("length"), Value::from(length));
+    info_with_bytes.insert(String::from("name"), Value::from(name));
+    info_with_bytes.insert(String::from("piece length"), Value::from(piece_length));
+    info_with_bytes.insert(String::from("pieces"), Value::from(pieces_bytes));
+
+
+
+
+    let bencoded_info = serde_bencode::ser::to_bytes(&info_with_bytes).expect("Couldn't bencode info");
+    //let decoded_bencoded_info = decode_bencoded_structure(bencoded_info.clone());
+    //println!("DEBUG: {:?}", decoded_bencoded_info);
+    let mut hasher = Sha1::new();
+    hasher.update(&bencoded_info);
+    let result = hasher.finalize();
+
+    format!("{:x}", result)
+
+}
+
 fn read_torrent_file(bytes: Vec<u8>) -> () {
     let parsed_file = decode_bencoded_structure(bytes);
     match parsed_file {
@@ -158,6 +189,17 @@ fn read_torrent_file(bytes: Vec<u8>) -> () {
                 .expect("Length not found")
                 .as_i64()
                 .unwrap());
+
+            // println!("DEBUG Info: {:?}", file.as_object()
+            //     .expect("Unable to convert file to object")
+            //     .get("info")
+            //     .expect("Info not found")
+            //     .as_object()
+            //     .unwrap());
+
+            let hashed_info = hash_info(file.as_object().expect("Unable to convert file to object").get("info").expect("Info not found").as_object().unwrap());
+            println!("Info Hash: {}", hashed_info);
+
         }
         Err(_) => {
             panic!("Couldn't parse the torrent file")
