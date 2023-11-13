@@ -151,7 +151,6 @@ struct Info {
 }
 
 fn hash_info(info: &Map<String, Value>) -> String {
-
     let length = info.get("length").expect("Length not present").as_i64().unwrap();
     let name = info.get("name").expect("Name not present").as_str().unwrap().to_string();
     let piece_length = info.get("piece length").expect("Piece length not present").as_i64().unwrap();
@@ -166,20 +165,32 @@ fn hash_info(info: &Map<String, Value>) -> String {
     };
 
     let bencoded_info = serde_bencode::to_bytes(&info_struct).expect("Couldn't bencode info");
-    //println!("DEBUG: {:?}", String::from_utf8_lossy(&bencoded_info.clone()));
-    //let decoded_bencoded_info = decode_bencoded_structure(bencoded_info.clone());
-    //println!("DEBUG NEW: {:?}", decoded_bencoded_info.unwrap());
     let mut hasher = Sha1::new();
     hasher.update(&bencoded_info);
     let result = hasher.finalize();
 
     format!("{:x}", result)
+}
+
+fn print_hash_pieces(info: &Map<String, Value>) -> () {
+    let piece_length = info.get("piece length").expect("Piece length not present").as_i64().unwrap();
+    let pieces_base64 = info.get("pieces").expect("Pieces not present").as_str().unwrap();
+    let pieces = general_purpose::STANDARD.decode(pieces_base64).expect("Can't decode pieces");
+
+    println!("Piece Length: {}", piece_length);
+    println!("Piece Hashes:");
+    let mut pieces_iter = pieces.chunks(20);
+    while let Some(chunk) = pieces_iter.next() {
+        for byte in chunk {
+            print!("{:02x}", byte);
+        }
+        println!();
+    }
 
 }
 
 fn read_torrent_file(bytes: Vec<u8>) -> () {
     let parsed_file = decode_bencoded_structure(bytes);
-    //println!("DEBUG ORIGINAL: {:?}", parsed_file.clone().unwrap());
 
     match parsed_file {
         Ok(file) => {
@@ -201,15 +212,10 @@ fn read_torrent_file(bytes: Vec<u8>) -> () {
                 .as_i64()
                 .unwrap());
 
-            // println!("DEBUG Info: {:?}", file.as_object()
-            //     .expect("Unable to convert file to object")
-            //     .get("info")
-            //     .expect("Info not found")
-            //     .as_object()
-            //     .unwrap());
-
             let hashed_info = hash_info(file.as_object().expect("Unable to convert file to object").get("info").expect("Info not found").as_object().unwrap());
             println!("Info Hash: {}", hashed_info);
+
+            print_hash_pieces(file.as_object().expect("Unable to convert file to object").get("info").expect("Info not found").as_object().unwrap());
 
         }
         Err(_) => {
