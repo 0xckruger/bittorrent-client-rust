@@ -1,6 +1,5 @@
 use serde_json;
 use std::{env, fs};
-use std::collections::HashMap;
 use std::fs::read;
 use std::iter::Peekable;
 use std::vec::IntoIter;
@@ -8,6 +7,7 @@ use serde_json::{Map, Value};
 use serde_json::Value::Array;
 use serde_json::Value::Object;
 use base64::{engine::general_purpose, Engine as _};
+use serde::{Deserialize, Serialize};
 use sha1::{Sha1, Digest};
 
 
@@ -140,26 +140,35 @@ fn parse_bencoded_map(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'sta
     Err("Unclosed map")
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+struct Info {
+    length: i64,
+    name: String,
+    #[serde(rename = "piece length")]
+    piece_length: i64,
+    #[serde(with = "serde_bytes")]
+    pieces: Vec<u8>,
+}
+
 fn hash_info(info: &Map<String, Value>) -> String {
 
     let length = info.get("length").expect("Length not present").as_i64().unwrap();
-    let name = info.get("name").expect("Name not present").as_str().unwrap();
+    let name = info.get("name").expect("Name not present").as_str().unwrap().to_string();
     let piece_length = info.get("piece length").expect("Piece length not present").as_i64().unwrap();
     let pieces_base64 = info.get("pieces").expect("Pieces not present").as_str().unwrap();
-    let pieces_bytes = general_purpose::STANDARD.decode(pieces_base64).expect("Can't decode pieces");
+    let pieces = general_purpose::STANDARD.decode(pieces_base64).expect("Can't decode pieces");
 
-    let mut info_with_bytes: HashMap<String, Value> = HashMap::new();
-    info_with_bytes.insert(String::from("length"), Value::from(length));
-    info_with_bytes.insert(String::from("name"), Value::from(name));
-    info_with_bytes.insert(String::from("piece length"), Value::from(piece_length));
-    info_with_bytes.insert(String::from("pieces"), Value::from(pieces_bytes));
+    let info_struct = Info {
+        length,
+        name,
+        piece_length,
+        pieces,
+    };
 
-
-
-
-    let bencoded_info = serde_bencode::ser::to_bytes(&info_with_bytes).expect("Couldn't bencode info");
+    let bencoded_info = serde_bencode::to_bytes(&info_struct).expect("Couldn't bencode info");
+    //println!("DEBUG: {:?}", String::from_utf8_lossy(&bencoded_info.clone()));
     //let decoded_bencoded_info = decode_bencoded_structure(bencoded_info.clone());
-    //println!("DEBUG: {:?}", decoded_bencoded_info);
+    //println!("DEBUG NEW: {:?}", decoded_bencoded_info.unwrap());
     let mut hasher = Sha1::new();
     hasher.update(&bencoded_info);
     let result = hasher.finalize();
@@ -170,6 +179,8 @@ fn hash_info(info: &Map<String, Value>) -> String {
 
 fn read_torrent_file(bytes: Vec<u8>) -> () {
     let parsed_file = decode_bencoded_structure(bytes);
+    //println!("DEBUG ORIGINAL: {:?}", parsed_file.clone().unwrap());
+
     match parsed_file {
         Ok(file) => {
             println!("Tracker URL: {}", file.as_object()
