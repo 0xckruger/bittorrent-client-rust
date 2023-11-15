@@ -244,12 +244,12 @@ fn generate_peer_id(length: usize) -> String {
 }
 
 fn url_encode_info_hash(bytes: Vec<u8>) -> String {
-    let mut s = String::with_capacity(3 * bytes.len());
-    for b in bytes {
-        s.push('%');
-        s.push_str(&hex::encode(&[b]))
+    let mut urlencoded_info_hash = "".to_string();
+    for byte in bytes {
+        urlencoded_info_hash += "%";
+        urlencoded_info_hash += &hex::encode(vec![byte]);
     }
-    s
+    urlencoded_info_hash
 }
 
 
@@ -257,7 +257,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     let info_hash_decoded = general_purpose::STANDARD.decode(info_hash).unwrap();
     let percent_encoded = url_encode_info_hash(info_hash_decoded);
     let tracker_request = TrackerRequest {
-        info_hash: percent_encoded,
+        info_hash: percent_encoded.to_string(),
         peer_id: generate_peer_id(20),
         port: 6881,
         uploaded: 0,
@@ -267,6 +267,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     };
 
     let url_with_query = format!("{}?{}", tracker_url, tracker_request.to_query_string());
+    println!("{}", url_with_query);
     let response = reqwest::blocking::get(url_with_query).expect("Query failed");
     if response.status().is_success() {
         let body_bytes = response.bytes().expect("Couldn't convert to bytes");
