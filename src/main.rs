@@ -2,6 +2,7 @@ use serde_json;
 use std::{env, fs};
 use std::fs::read;
 use std::iter::Peekable;
+use std::str::FromStr;
 use std::vec::IntoIter;
 use serde_json::{Map, Value};
 use serde_json::Value::Array;
@@ -9,7 +10,10 @@ use serde_json::Value::Object;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha1::{Sha1, Digest};
-
+use std::net::{Ipv4Addr};
+use reqwest;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
 fn decode_bencoded_structure(encoded_value: Vec<u8>) -> Result<Value, &'static str> {
     let mut bytes = encoded_value.into_iter().peekable();
@@ -140,6 +144,26 @@ fn parse_bencoded_map(bytes: &mut Peekable<IntoIter<u8>>) -> Result<Value, &'sta
     Err("Unclosed map")
 }
 
+#[derive(Debug)]
+enum Command {
+    Decode,
+    Info,
+    Peers,
+}
+
+impl FromStr for Command {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "decode" => Ok(Command::Decode),
+            "info" => Ok(Command::Info),
+            "peers" => Ok(Command::Peers),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 struct Info {
     length: i64,
@@ -186,65 +210,171 @@ fn print_hash_pieces(info: &Map<String, Value>) -> () {
         }
         println!();
     }
-
 }
 
-fn read_torrent_file(bytes: Vec<u8>) -> () {
+struct TrackerRequest {
+    info_hash: String,
+    peer_id: String,
+    port: i32,
+    uploaded: u32,
+    downloaded: u32,
+    left: u32,
+    compact: u8,
+}
+
+impl TrackerRequest {
+    fn to_query_string(&self) -> String {
+        format!(
+            "info_hash={}&peer_id={}&port={}&uploaded={}&downloaded={}&left={}&compact={}",
+            self.info_hash,
+            self.peer_id,
+            self.port,
+            self.uploaded,
+            self.downloaded,
+            self.left,
+            self.compact
+        )
+    }
+}
+
+fn generate_peer_id(length: usize) -> String {
+    let rng = thread_rng();
+    let random_string: String = rng.sample_iter(&Alphanumeric).take(length).map(char::from).collect();
+    random_string
+}
+
+fn url_encode_info_hash(bytes: Vec<u8>) -> String {
+    let mut s = String::with_capacity(3 * bytes.len());
+    for b in bytes {
+        s.push('%');
+        s.push_str(&hex::encode(&[b]))
+    }
+    s
+}
+
+
+fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
+    let info_hash_decoded = general_purpose::STANDARD.decode(info_hash).unwrap();
+    let percent_encoded = url_encode_info_hash(info_hash_decoded);
+    let tracker_request = TrackerRequest {
+        info_hash: percent_encoded,
+        peer_id: generate_peer_id(20),
+        port: 6881,
+        uploaded: 0,
+        downloaded: 0,
+        left: 0,
+        compact: 1,
+    };
+
+    let url_with_query = format!("{}?{}", tracker_url, tracker_request.to_query_string());
+    let response = reqwest::blocking::get(url_with_query).expect("Query failed");
+    if response.status().is_success() {
+        let body_bytes = response.bytes().expect("Couldn't convert to bytes");
+        let body_vec: Vec<u8> = body_bytes.to_vec();
+        let response_decoded = decode_bencoded_structure(body_vec);
+        match response_decoded {
+            Ok(value) => {
+                let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
+                if let Ok(peers_vec) = serde_json::to_vec(peers) {
+                    for chunk in peers_vec.chunks(6) {
+                        let ip = Ipv4Addr::new(chunk[0], chunk[1], chunk[2], chunk[3]);
+                        let port = ((chunk[4] as u16) << 8) | (chunk[5] as u16);
+                        println!("{}:{}", ip, port);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Couldn't decode response: {}", e);
+            }
+        }
+
+    } else {
+        eprintln!("Bad response from client! {}", response.status());
+    }
+}
+
+fn read_torrent_file(bytes: Vec<u8>, command: Command) -> () {
     let parsed_file = decode_bencoded_structure(bytes);
 
     match parsed_file {
         Ok(file) => {
-            println!("Tracker URL: {}", file.as_object()
-                .expect("Unable to convert file to object")
+            let file_obj = file.as_object().expect("Unable to convert file to object");
+
+            let announce = file_obj
                 .get("announce")
                 .expect("Announce not found in parsed file")
                 .as_str()
-                .unwrap());
+                .expect("Announce is not a string");
 
-            println!("Length: {}", file.as_object()
-                .expect("Unable to convert file to object")
+            let info = file_obj
                 .get("info")
                 .expect("Info not found")
                 .as_object()
-                .expect("Unable to convert info to object")
+                .expect("Info is not an object");
+
+            let length = info
                 .get("length")
                 .expect("Length not found")
                 .as_i64()
-                .unwrap());
+                .expect("Length is not an integer");
 
-            let hashed_info = hash_info(file.as_object().expect("Unable to convert file to object").get("info").expect("Info not found").as_object().unwrap());
-            println!("Info Hash: {}", hashed_info);
+            let hashed_info = hash_info(info);
 
-            print_hash_pieces(file.as_object().expect("Unable to convert file to object").get("info").expect("Info not found").as_object().unwrap());
+            match command {
+                Command::Info => {
+                    println!("Tracker URL: {}", announce);
+                    println!("Length: {}", length);
+                    println!("Info Hash: {}", hashed_info);
 
+                    print_hash_pieces(info);
+                }
+                Command::Peers => {
+                    tracker_url_request(announce, hashed_info);
+                }
+                _ => {
+                    eprintln!("Nothing implemented here yet!");
+                }
+            }
         }
         Err(_) => {
-            panic!("Couldn't parse the torrent file")
+            eprintln!("Error parsing file");
         }
     }
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        eprintln!("Usage: decode [bencoded string], info [torrent file], peers [torrent file]");
+        return;
+    }
+
     let command = &args[1];
 
-    if command == "decode" {
-        let encoded_value = &args[2];
-        let encoded_value_bytes = Vec::from(encoded_value.as_bytes());
-        let decoded_value = decode_bencoded_structure(encoded_value_bytes);
-        println!("{}", decoded_value.unwrap().to_string());
-    } else if command == "info" {
-        let file_name = &args[2];
-        if fs::metadata(file_name).is_ok() {
-            if let Ok(bytes) = read(file_name) {
-                read_torrent_file(bytes)
-            } else {
-                panic!("Couldn't read the file")
+    match Command::from_str(command) {
+        Ok(command) => {
+            match command {
+                Command::Decode => {
+                    let encoded_value = &args[2];
+                    let encoded_value_bytes = Vec::from(encoded_value.as_bytes());
+                    let decoded_value = decode_bencoded_structure(encoded_value_bytes);
+                    println!("{}", decoded_value.unwrap().to_string());
+                }
+                Command::Info | Command::Peers => {
+                    let file_name = &args[2];
+                    if fs::metadata(file_name).is_ok() {
+                        if let Ok(bytes) = read(file_name) {
+                            read_torrent_file(bytes, command)
+                        } else {
+                            panic!("Couldn't read the file")
+                        }
+                    } else {
+                        panic!("File does not exist")
+                    }
+                }
             }
-        } else {
-            panic!("File does not exist")
         }
-    } else {
-        panic!("unsupported action")
+        _ => {}
     }
 }
