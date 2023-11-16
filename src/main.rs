@@ -294,7 +294,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
             Ok(value) => {
                 let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
                 if let Ok(peers_vec) = serde_json::to_vec(peers) {
-                    for chunk in peers_vec.chunks(6) {
+                    for chunk in peers_vec.chunks_exact(6) {
                         let ip = Ipv4Addr::new(chunk[0], chunk[1], chunk[2], chunk[3]);
                         let port = ((chunk[4] as u16) << 8) | (chunk[5] as u16);
                         println!("{}:{}", ip, port);
