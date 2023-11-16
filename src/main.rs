@@ -14,7 +14,7 @@ use std::net::{Ipv4Addr};
 use reqwest;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use urlencoding::encode_binary;
+
 
 fn decode_bencoded_structure(encoded_value: Vec<u8>) -> Result<Value, &'static str> {
     let mut bytes = encoded_value.into_iter().peekable();
@@ -244,15 +244,35 @@ fn generate_peer_id(length: usize) -> String {
     random_string
 }
 
-fn url_encode_info_hash(bytes: Vec<u8>) -> String {
-    let url_encoded_bytes = encode_binary(&*bytes);
-    url_encoded_bytes.to_string()
+fn hex_string_to_readable(hex_string: String) -> String {
+    let mut readable_string = String::new();
+    let mut hex_chars = hex_string.chars();
+
+    while let (Some(first), Some(second)) = (hex_chars.next(), hex_chars.next()) {
+        let byte = u8::from_str_radix(&format!("{}{}", first, second), 16);
+        if let Ok(byte_value) = byte {
+            if byte_value.is_ascii() {
+                match byte_value {
+                    b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' | b'-' | b'_' | b'.' | b'~' => {
+                        readable_string.push(byte_value as char);
+                    }
+                    _ => readable_string.push_str(&format!("%{:02x}", byte_value)),
+                }
+            } else {
+                readable_string.push_str(&format!("%{:02x}", byte_value));
+            }
+        } else {
+            println!("Invalid hex string: {}", hex_string);
+            return String::new();
+        }
+    }
+
+    readable_string
 }
 
 
 fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
-    let info_hash_decoded = general_purpose::STANDARD.decode(info_hash).unwrap();
-    let percent_encoded = url_encode_info_hash(info_hash_decoded);
+    let percent_encoded = hex_string_to_readable(info_hash);
     let tracker_request = TrackerRequest {
         info_hash: percent_encoded.to_string(),
         peer_id: generate_peer_id(20),
@@ -264,7 +284,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     };
 
     let url_with_query = format!("{}?{}", tracker_url, tracker_request.to_query_string());
-    // println!("{}", url_with_query);
+    println!("{}", url_with_query);
     let response = reqwest::blocking::get(url_with_query).expect("Query failed");
     if response.status().is_success() {
         let body_bytes = response.bytes().expect("Couldn't convert to bytes");
