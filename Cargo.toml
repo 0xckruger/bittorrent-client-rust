@@ -38,3 +38,4 @@ base64 = "0.21.2"                # async http requests
 percent-encoding = { version = "2.3.0", features = [] }
 rand = "0.8.5"
 log = "0.4.20"
+urlencoding = "2.1.3"

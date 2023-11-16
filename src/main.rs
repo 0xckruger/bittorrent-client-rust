@@ -14,6 +14,7 @@ use std::net::{Ipv4Addr};
 use reqwest;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+use urlencoding::encode_binary;
 
 fn decode_bencoded_structure(encoded_value: Vec<u8>) -> Result<Value, &'static str> {
     let mut bytes = encoded_value.into_iter().peekable();
@@ -244,12 +245,8 @@ fn generate_peer_id(length: usize) -> String {
 }
 
 fn url_encode_info_hash(bytes: Vec<u8>) -> String {
-    let mut urlencoded_info_hash = "".to_string();
-    for byte in bytes {
-        urlencoded_info_hash += "%";
-        urlencoded_info_hash += &hex::encode(vec![byte]);
-    }
-    urlencoded_info_hash
+    let url_encoded_bytes = encode_binary(&*bytes);
+    url_encoded_bytes.to_string()
 }
 
 
