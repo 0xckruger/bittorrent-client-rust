@@ -264,7 +264,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     };
 
     let url_with_query = format!("{}?{}", tracker_url, tracker_request.to_query_string());
-    println!("{}", url_with_query);
+    // println!("{}", url_with_query);
     let response = reqwest::blocking::get(url_with_query).expect("Query failed");
     if response.status().is_success() {
         let body_bytes = response.bytes().expect("Couldn't convert to bytes");
