@@ -270,6 +270,20 @@ fn hex_string_to_readable(hex_string: String) -> String {
     readable_string
 }
 
+fn print_byte_array_peers(bytes: &[u8]) -> () {
+    for group in bytes.chunks(6) {
+        print!("{}.{}.{}.{}", group[0] as u32, group[1] as u32, group[2] as u32, group[3] as u32);
+        let port_bytes: &[u8] = &group[4..=5]; // Slice representing the 2-byte value
+
+        if let Ok(port_array) = port_bytes.try_into() {
+            let port_value = u16::from_be_bytes(port_array);
+            println!(":{}", port_value);
+        } else {
+            eprintln!("Invalid slice length");
+        }
+    }
+}
+
 fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     let percent_encoded = hex_string_to_readable(info_hash);
     let tracker_request = TrackerRequest {
@@ -291,14 +305,9 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
         match response_decoded {
             Ok(value) => {
                 let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
-                println!("Peers string: {:?}", peers);
-                if let Ok(peers_vec) = serde_json::to_vec(peers) {
-                    for chunk in peers_vec.chunks_exact(6) {
-                        let ip = Ipv4Addr::new(chunk[0], chunk[1], chunk[2], chunk[3]);
-                        let port = u16::from_be_bytes([chunk[4], chunk[5]]);
-                        println!("{}:{}", ip, port);
-                    }
-                }
+                //println!("Peers string: {:?}", peers);
+                let peer_bytes = peers.as_str().expect("Can't convert peers to str").as_bytes();
+                print_byte_array_peers(peer_bytes);
             }
             Err(e) => {
                 eprintln!("Couldn't decode response: {}", e);
