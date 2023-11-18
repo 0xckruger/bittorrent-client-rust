@@ -10,7 +10,6 @@ use serde_json::Value::Object;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha1::{Sha1, Digest};
-use std::net::{Ipv4Addr};
 use reqwest;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -305,7 +304,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
         match response_decoded {
             Ok(value) => {
                 let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
-                //println!("Peers string: {:?}", peers);
+                println!("Peers string: {:?}", peers);
                 let peer_bytes = peers.as_str().expect("Can't convert peers to str").as_bytes();
                 print_byte_array_peers(peer_bytes);
             }
