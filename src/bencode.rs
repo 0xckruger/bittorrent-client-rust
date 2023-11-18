@@ -67,8 +67,10 @@ fn parse_bencoded_string(bytes: &mut Peekable<IntoIter<u8>>, length: usize) -> R
             b':' => {
                 let data: Vec<u8> = bytes.take(length).collect();
                 return if let Ok(utf8_string) = std::str::from_utf8(&data) {
+                    //println!("Decoded a UTF8 String: {}", utf8_string);
                     Ok(Value::String(utf8_string.parse().unwrap()))
                 } else {
+                    //println!("Not a UTF8 String!");
                     Ok(Value::String(general_purpose::STANDARD.encode(&data)))
                 }
             }

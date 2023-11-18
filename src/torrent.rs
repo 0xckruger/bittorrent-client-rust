@@ -37,10 +37,6 @@ fn hash_info(info: &Map<String, Value>) -> String {
     hasher.update(&bencoded_info);
     let result = hasher.finalize();
 
-    println!("DEBUG: Name: {}", name);
-    println!("DEBUG: Length: {}", length);
-    println!("DEBUG: Info hash: {:x}", result);
-
     format!("{:x}", result)
 }
 
@@ -151,16 +147,18 @@ fn tracker_url_request(tracker_url: &str, info_hash: String, length: u64) -> () 
         let response_decoded = decode_bencoded_structure(body_bytes);
         match response_decoded {
             Ok(value) => {
-                println!("Object response --> {:?}", value.as_object().unwrap());
+                println!("DEBUG: Object response --> {:?}", value.as_object().unwrap());
                 let peers = value.as_object()
                     .expect("Unable to convert value to object")
                     .get("peers")
                     .expect("Unable to get peers");
-                println!("Peer string: {}", peers.as_str().unwrap());
-                let peer_bytes = peers
-                    .as_str()
-                    .expect("Couldn't convert peers to string").as_bytes();
-                print_byte_array_peers(peer_bytes);
+                let peers_string = peers.as_str().expect("Couldn't get peer string");
+                let peers_string_decoded = general_purpose::STANDARD.decode(peers_string).expect("Can't decode peers from hex");
+                // let peer_bytes = peers
+                //     .as_str()
+                //     .expect("Couldn't convert peers to string").as_bytes();
+                let peer_byte_array = peers_string_decoded.as_slice();
+                print_byte_array_peers(peer_byte_array);
             }
             Err(e) => {
                 eprintln!("Couldn't decode response: {}", e);
@@ -207,6 +205,11 @@ pub fn read_torrent_file(bytes: Vec<u8>, command: Command) -> () {
                     print_hash_pieces(info);
                 }
                 Command::Peers => {
+                    let length = info.get("length").expect("Length not present").as_i64().unwrap();
+                    let name = info.get("name").expect("Name not present").as_str().unwrap().to_string();
+                    println!("DEBUG: Name --> {}", name.clone());
+                    println!("DEBUG: Length --> {}", length.clone());
+                    println!("DEBUG: Info Hash --> {}", hashed_info.clone());
                     tracker_url_request(announce, hashed_info, length as u64);
                 }
                 _ => {
