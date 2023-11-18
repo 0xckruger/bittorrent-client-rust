@@ -140,6 +140,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     };
 
     let url_with_query = format!("{}?{}", tracker_url, tracker_request.to_query_string());
+    println!("URL W/ QUERY: {}", url_with_query);
     let response = reqwest::blocking::get(url_with_query).expect("Query failed");
     if response.status().is_success() {
         let body_bytes = response.bytes().expect("Couldn't convert to bytes").to_vec();
@@ -147,6 +148,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
         match response_decoded {
             Ok(value) => {
                 let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
+                println!("PEERS DECODED STRING: {}", peers.as_str().unwrap());
                 let peer_bytes = peers.as_str().expect("Couldn't convert peers to string").as_bytes();
                 print_byte_array_peers(peer_bytes);
             }
