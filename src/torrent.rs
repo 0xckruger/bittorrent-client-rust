@@ -62,7 +62,7 @@ struct TrackerRequest {
     port: i32,
     uploaded: u32,
     downloaded: u32,
-    left: u32,
+    left: u64,
     compact: u8,
 }
 
@@ -127,7 +127,7 @@ fn print_byte_array_peers(bytes: &[u8]) -> () {
     }
 }
 
-fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
+fn tracker_url_request(tracker_url: &str, info_hash: String, length: u64) -> () {
     let percent_encoded = percent_encode_hex(info_hash);
     let tracker_request = TrackerRequest {
         info_hash: percent_encoded.to_string(),
@@ -135,7 +135,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
         port: 6881,
         uploaded: 0,
         downloaded: 0,
-        left: 0,
+        left: length,
         compact: 1,
     };
 
@@ -200,7 +200,7 @@ pub fn read_torrent_file(bytes: Vec<u8>, command: Command) -> () {
                     print_hash_pieces(info);
                 }
                 Command::Peers => {
-                    tracker_url_request(announce, hashed_info);
+                    tracker_url_request(announce, hashed_info, length);
                 }
                 _ => {
                     eprintln!("Nothing implemented here yet!");
