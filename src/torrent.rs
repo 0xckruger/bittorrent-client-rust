@@ -88,8 +88,8 @@ fn generate_peer_id(length: usize) -> String {
     random_string
 }
 
-fn hex_string_to_readable(hex_string: String) -> String {
-    let mut readable_string = String::new();
+fn percent_encode_hex(hex_string: String) -> String {
+    let mut percent_encoded_string = String::new();
     let mut hex_chars = hex_string.chars();
 
     while let (Some(first), Some(second)) = (hex_chars.next(), hex_chars.next()) {
@@ -98,19 +98,19 @@ fn hex_string_to_readable(hex_string: String) -> String {
             if byte_value.is_ascii() {
                 match byte_value {
                     b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' | b'-' | b'_' | b'.' | b'~' => {
-                        readable_string.push(byte_value as char);
+                        percent_encoded_string.push(byte_value as char);
                     }
-                    _ => readable_string.push_str(&format!("%{:02x}", byte_value)),
+                    _ => percent_encoded_string.push_str(&format!("%{:02x}", byte_value)),
                 }
             } else {
-                readable_string.push_str(&format!("%{:02x}", byte_value));
+                percent_encoded_string.push_str(&format!("%{:02x}", byte_value));
             }
         } else {
             println!("Invalid hex string: {}", hex_string);
             return String::new();
         }
     }
-    readable_string
+    percent_encoded_string
 }
 
 fn print_byte_array_peers(bytes: &[u8]) -> () {
@@ -128,7 +128,7 @@ fn print_byte_array_peers(bytes: &[u8]) -> () {
 }
 
 fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
-    let percent_encoded = hex_string_to_readable(info_hash);
+    let percent_encoded = percent_encode_hex(info_hash);
     let tracker_request = TrackerRequest {
         info_hash: percent_encoded.to_string(),
         peer_id: "00112233445566778899".to_string(),
@@ -140,16 +140,19 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     };
 
     let url_with_query = format!("{}?{}", tracker_url, tracker_request.to_query_string());
-    println!("URL W/ QUERY: {}", url_with_query);
     let response = reqwest::blocking::get(url_with_query).expect("Query failed");
     if response.status().is_success() {
         let body_bytes = response.bytes().expect("Couldn't convert to bytes").to_vec();
         let response_decoded = decode_bencoded_structure(body_bytes);
         match response_decoded {
             Ok(value) => {
-                let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
-                println!("PEERS DECODED STRING: {}", peers.as_str().unwrap());
-                let peer_bytes = peers.as_str().expect("Couldn't convert peers to string").as_bytes();
+                let peers = value.as_object()
+                    .expect("Unable to convert value to object")
+                    .get("peers")
+                    .expect("Unable to get peers");
+                let peer_bytes = peers
+                    .as_str()
+                    .expect("Couldn't convert peers to string").as_bytes();
                 print_byte_array_peers(peer_bytes);
             }
             Err(e) => {
