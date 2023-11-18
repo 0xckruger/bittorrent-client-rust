@@ -146,7 +146,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
             Ok(value) => {
                 let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
                 let peers_string = peers.as_str().expect("Couldn't convert peers to string");
-                println!("Peers String: {}", peers_string);
+                println!("Peers String --> {}", peers_string);
                 let peer_bytes = peers_string.as_bytes();
                 print_byte_array_peers(peer_bytes);
             }
