@@ -10,6 +10,7 @@ use serde_json::Value::Object;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha1::{Sha1, Digest};
+use std::net::{Ipv4Addr};
 use reqwest;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -290,23 +291,20 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
         match response_decoded {
             Ok(value) => {
                 let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
-                let bytes = hex::decode(peers.to_string()).unwrap();
-                for i in (0..bytes.len()).step_by(6) {
-                    let ip = [
-                        bytes[i].to_string(),
-                        bytes[i + 1].to_string(),
-                        bytes[i + 2].to_string(),
-                        bytes[i + 3].to_string(),
-                    ]
-                        .join(".");
-                    let port = ((bytes[i + 4] as u16) << 8) | (bytes[i + 5] as u16);
-                    println!("{}:{}", ip, port);
+                println!("Peers string: {:?}", peers);
+                if let Ok(peers_vec) = serde_json::to_vec(peers) {
+                    for chunk in peers_vec.chunks_exact(6) {
+                        let ip = Ipv4Addr::new(chunk[0], chunk[1], chunk[2], chunk[3]);
+                        let port = u16::from_be_bytes([chunk[4], chunk[5]]);
+                        println!("{}:{}", ip, port);
+                    }
                 }
             }
             Err(e) => {
                 eprintln!("Couldn't decode response: {}", e);
             }
         }
+
     } else {
         eprintln!("Bad response from client! {}", response.status());
     }
