@@ -4,6 +4,8 @@ use serde_json::{Map, Value};
 use sha1::{Sha1, Digest};
 use serde::{Deserialize, Serialize};
 use base64::{engine::general_purpose, Engine as _};
+use rand::{Rng, thread_rng};
+use rand::distributions::Alphanumeric;
 
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -79,11 +81,11 @@ impl TrackerRequest {
     }
 }
 
-fn generate_peer_id(_length: usize) -> String {
-    // let rng = thread_rng();
-    // let random_string: String = rng.sample_iter(&Alphanumeric).take(length).map(char::from).collect();
-    // random_string
-    String::from("00112233445566778899")
+#[allow(dead_code)]
+fn generate_peer_id(length: usize) -> String {
+    let rng = thread_rng();
+    let random_string: String = rng.sample_iter(&Alphanumeric).take(length).map(char::from).collect();
+    random_string
 }
 
 fn hex_string_to_readable(hex_string: String) -> String {
@@ -129,7 +131,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
     let percent_encoded = hex_string_to_readable(info_hash);
     let tracker_request = TrackerRequest {
         info_hash: percent_encoded.to_string(),
-        peer_id: generate_peer_id(20),
+        peer_id: "00112233445566778899".to_string(),
         port: 6881,
         uploaded: 0,
         downloaded: 0,
@@ -152,7 +154,6 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
                 eprintln!("Couldn't decode response: {}", e);
             }
         }
-
     } else {
         eprintln!("Bad response from client! {}", response.status());
     }
