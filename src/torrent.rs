@@ -37,6 +37,10 @@ fn hash_info(info: &Map<String, Value>) -> String {
     hasher.update(&bencoded_info);
     let result = hasher.finalize();
 
+    println!("DEBUG: Name: {}", name);
+    println!("DEBUG: Length: {}", length);
+    println!("DEBUG: Info hash: {:x}", result);
+
     format!("{:x}", result)
 }
 
