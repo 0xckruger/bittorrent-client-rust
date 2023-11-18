@@ -200,7 +200,7 @@ pub fn read_torrent_file(bytes: Vec<u8>, command: Command) -> () {
                     print_hash_pieces(info);
                 }
                 Command::Peers => {
-                    tracker_url_request(announce, hashed_info, length);
+                    tracker_url_request(announce, hashed_info, length as u64);
                 }
                 _ => {
                     eprintln!("Nothing implemented here yet!");
