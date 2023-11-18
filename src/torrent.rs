@@ -108,7 +108,6 @@ fn hex_string_to_readable(hex_string: String) -> String {
             return String::new();
         }
     }
-
     readable_string
 }
 
@@ -146,7 +145,9 @@ fn tracker_url_request(tracker_url: &str, info_hash: String) -> () {
         match response_decoded {
             Ok(value) => {
                 let peers = value.as_object().expect("Unable to convert to object").get("peers").expect("Unable to get peers");
-                let peer_bytes = peers.as_str().expect("Can't convert peers to str").as_bytes();
+                let peers_string = peers.as_str().expect("Couldn't convert peers to string");
+                println!("Peers String: {}", peers_string);
+                let peer_bytes = peers_string.as_bytes();
                 print_byte_array_peers(peer_bytes);
             }
             Err(e) => {
