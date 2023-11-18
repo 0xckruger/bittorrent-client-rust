@@ -147,6 +147,7 @@ fn tracker_url_request(tracker_url: &str, info_hash: String, length: u64) -> () 
         let response_decoded = decode_bencoded_structure(body_bytes);
         match response_decoded {
             Ok(value) => {
+                println!("Object response: {:?}", value.as_object().unwrap());
                 let peers = value.as_object()
                     .expect("Unable to convert value to object")
                     .get("peers")
