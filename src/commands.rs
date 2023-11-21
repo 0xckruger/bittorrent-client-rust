@@ -1,3 +1,5 @@
+/// Functions that carry out the execution of the client's CLI commands
+
 use crate::bencode::decode_bencoded_structure;
 use crate::torrent::{
     hash_info, percent_encode_hex, print_byte_array_peers, print_hash_pieces, TorrentInfo,

@@ -1,3 +1,4 @@
+/// Main function, associated Command types and their entry points
 mod bencode;
 mod commands;
 mod torrent;

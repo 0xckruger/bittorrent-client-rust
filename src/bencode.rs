@@ -1,3 +1,5 @@
+/// Core Bencode decoder algorithm
+
 use base64::{engine::general_purpose, Engine as _};
 use serde_json::Value::Array;
 use serde_json::Value::Object;

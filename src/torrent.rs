@@ -1,3 +1,5 @@
+/// Helper functions for processing torrent files
+
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
