@@ -1,67 +1,89 @@
 mod bencode;
+mod commands;
 mod torrent;
 
-use std::{env, fs};
-use std::fs::read;
+use crate::commands::{print_bencoded_string, establish_peer_connection, fetch_and_print_torrent_info, fetch_and_print_torrent_peers};
+use std::fs::File;
 use std::str::FromStr;
-use crate::bencode::decode_bencoded_structure;
-use crate::torrent::read_torrent_file;
-
+use std::{env};
 
 #[derive(Debug)]
 pub enum Command {
-    Decode,
-    Info,
-    Peers,
+    Decode(String),
+    Info(File),
+    Peers(File),
+    Handshake { file: File, string: String },
 }
 
 impl FromStr for Command {
-    type Err = ();
-
+    type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let args: Vec<String> = env::args().collect();
+
         match s.to_lowercase().as_str() {
-            "decode" => Ok(Command::Decode),
-            "info" => Ok(Command::Info),
-            "peers" => Ok(Command::Peers),
-            _ => Err(()),
+            "decode" => {
+                if args.len() < 3 {
+                    return Err("Bencoded string required".to_string());
+                }
+                Ok(Command::Decode(args[2].clone()))
+            }
+            "info" | "peers" | "handshake" => {
+                if s == "handshake" && args.len() < 4 {
+                    return Err("File name and peer IP:port required".to_string());
+                } else if args.len() < 3 {
+                    return Err("File name required".to_string());
+                }
+                match File::open(&args[2]) {
+                    Ok(file) => {
+                        if s == "info" {
+                            Ok(Command::Info(file))
+                        } else if s == "peers" {
+                            Ok(Command::Peers(file))
+                        } else {
+                            Ok(Command::Handshake {
+                                file,
+                                string: args[3].clone(),
+                            })
+                        }
+                    }
+                    Err(_) => Err(format!("File '{}' not found", &args[2])),
+                }
+            }
+            _ => Err("Invalid command!".to_string()),
         }
     }
 }
 
-
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        eprintln!("Usage: decode [bencoded string], info [torrent file], peers [torrent file]");
+    if args.len() < 2 || &args[2] == "help" {
+        eprintln!(
+            "Usage: decode [bencoded string], info [torrent file], peers [torrent file]\
+        , handshake [torrent file] [peer ip: peer port]"
+        );
         return;
     }
 
     let command = &args[1];
 
     match Command::from_str(command) {
-        Ok(command) => {
-            match command {
-                Command::Decode => {
-                    let encoded_value = &args[2];
-                    let encoded_value_bytes = Vec::from(encoded_value.as_bytes());
-                    let decoded_value = decode_bencoded_structure(encoded_value_bytes);
-                    println!("{}", decoded_value.unwrap().to_string());
-                }
-                Command::Info | Command::Peers => {
-                    let file_name = &args[2];
-                    if fs::metadata(file_name).is_ok() {
-                        if let Ok(bytes) = read(file_name) {
-                            read_torrent_file(bytes, command)
-                        } else {
-                            panic!("Couldn't read the file")
-                        }
-                    } else {
-                        panic!("File does not exist")
-                    }
+        Ok(command) => match command {
+            Command::Decode(bencoded_value) => {
+                print_bencoded_string(bencoded_value)
+            }
+            Command::Info(mut file) => {
+                if let Err(err) = fetch_and_print_torrent_info(&mut file, true) {
+                    eprintln!("Error: {}", err);
                 }
             }
-        }
+            Command::Peers(mut file) => {
+                if let Err(err) = fetch_and_print_torrent_peers(&mut file) {
+                    eprintln!("Error: {}", err);
+                }
+            },
+            Command::Handshake { file, string } => establish_peer_connection(file, string),
+        },
         _ => {}
     }
 }

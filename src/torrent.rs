@@ -1,12 +1,9 @@
-use crate::bencode::decode_bencoded_structure;
-use crate::Command;
-use serde_json::{Map, Value};
-use sha1::{Sha1, Digest};
-use serde::{Deserialize, Serialize};
 use base64::{engine::general_purpose, Engine as _};
-use rand::{Rng, thread_rng};
-use rand::distributions::Alphanumeric;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use sha1::{Digest, Sha1};
 
+pub struct TorrentInfo(pub String, pub String, pub i64);
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 struct Info {
@@ -18,12 +15,56 @@ struct Info {
     pieces: Vec<u8>,
 }
 
-fn hash_info(info: &Map<String, Value>) -> String {
-    let length = info.get("length").expect("Length not present").as_i64().unwrap();
-    let name = info.get("name").expect("Name not present").as_str().unwrap().to_string();
-    let piece_length = info.get("piece length").expect("Piece length not present").as_i64().unwrap();
-    let pieces_base64 = info.get("pieces").expect("Pieces not present").as_str().unwrap();
-    let pieces = general_purpose::STANDARD.decode(pieces_base64).expect("Can't decode pieces");
+pub struct TrackerRequest {
+    pub(crate) info_hash: String,
+    pub(crate) peer_id: String,
+    pub(crate) port: i32,
+    pub(crate) uploaded: u32,
+    pub(crate) downloaded: u32,
+    pub(crate) left: u32,
+    pub(crate) compact: u8,
+}
+
+impl TrackerRequest {
+    pub(crate) fn to_query_string(&self) -> String {
+        format!(
+            "info_hash={}&peer_id={}&port={}&uploaded={}&downloaded={}&left={}&compact={}",
+            self.info_hash,
+            self.peer_id,
+            self.port,
+            self.uploaded,
+            self.downloaded,
+            self.left,
+            self.compact
+        )
+    }
+}
+
+pub fn hash_info(info: &Map<String, Value>) -> String {
+    let length = info
+        .get("length")
+        .expect("Length not present")
+        .as_i64()
+        .unwrap();
+    let name = info
+        .get("name")
+        .expect("Name not present")
+        .as_str()
+        .unwrap()
+        .to_string();
+    let piece_length = info
+        .get("piece length")
+        .expect("Piece length not present")
+        .as_i64()
+        .unwrap();
+    let pieces_base64 = info
+        .get("pieces")
+        .expect("Pieces not present")
+        .as_str()
+        .unwrap();
+    let pieces = general_purpose::STANDARD
+        .decode(pieces_base64)
+        .expect("Can't decode pieces");
 
     let info_struct = Info {
         length,
@@ -40,10 +81,20 @@ fn hash_info(info: &Map<String, Value>) -> String {
     format!("{:x}", result)
 }
 
-fn print_hash_pieces(info: &Map<String, Value>) -> () {
-    let piece_length = info.get("piece length").expect("Piece length not present").as_i64().unwrap();
-    let pieces_base64 = info.get("pieces").expect("Pieces not present").as_str().unwrap();
-    let pieces = general_purpose::STANDARD.decode(pieces_base64).expect("Can't decode pieces");
+pub fn print_hash_pieces(info: &Map<String, Value>) -> () {
+    let piece_length = info
+        .get("piece length")
+        .expect("Piece length not present")
+        .as_i64()
+        .unwrap();
+    let pieces_base64 = info
+        .get("pieces")
+        .expect("Pieces not present")
+        .as_str()
+        .unwrap();
+    let pieces = general_purpose::STANDARD
+        .decode(pieces_base64)
+        .expect("Can't decode pieces");
 
     println!("Piece Length: {}", piece_length);
     println!("Piece Hashes:");
@@ -56,39 +107,7 @@ fn print_hash_pieces(info: &Map<String, Value>) -> () {
     }
 }
 
-struct TrackerRequest {
-    info_hash: String,
-    peer_id: String,
-    port: i32,
-    uploaded: u32,
-    downloaded: u32,
-    left: u64,
-    compact: u8,
-}
-
-impl TrackerRequest {
-    fn to_query_string(&self) -> String {
-        format!(
-            "info_hash={}&peer_id={}&port={}&uploaded={}&downloaded={}&left={}&compact={}",
-            self.info_hash,
-            self.peer_id,
-            self.port,
-            self.uploaded,
-            self.downloaded,
-            self.left,
-            self.compact
-        )
-    }
-}
-
-#[allow(dead_code)]
-fn generate_peer_id(length: usize) -> String {
-    let rng = thread_rng();
-    let random_string: String = rng.sample_iter(&Alphanumeric).take(length).map(char::from).collect();
-    random_string
-}
-
-fn percent_encode_hex(hex_string: String) -> String {
+pub fn percent_encode_hex(hex_string: String) -> String {
     let mut percent_encoded_string = String::new();
     let mut hex_chars = hex_string.chars();
 
@@ -113,7 +132,7 @@ fn percent_encode_hex(hex_string: String) -> String {
     percent_encoded_string
 }
 
-fn print_byte_array_peers(bytes: &[u8]) -> () {
+pub fn print_byte_array_peers(bytes: &[u8]) -> () {
     for group in bytes.chunks(6) {
         print!("{}.{}.{}.{}", group[0], group[1], group[2], group[3]);
         let port_bytes: &[u8] = &group[4..=5]; // Slice representing the 2-byte value
@@ -123,102 +142,6 @@ fn print_byte_array_peers(bytes: &[u8]) -> () {
             println!(":{}", port_value);
         } else {
             eprintln!("Invalid slice length");
-        }
-    }
-}
-
-fn tracker_url_request(tracker_url: &str, info_hash: String, length: u64) -> () {
-    let percent_encoded = percent_encode_hex(info_hash);
-    let tracker_request = TrackerRequest {
-        info_hash: percent_encoded.to_string(),
-        peer_id: "00112233445566778899".to_string(),
-        port: 6881,
-        uploaded: 0,
-        downloaded: 0,
-        left: length,
-        compact: 1,
-    };
-
-    let url_with_query = format!("{}?{}", tracker_url, tracker_request.to_query_string());
-    println!("URL: {}", url_with_query);
-    let response = reqwest::blocking::get(url_with_query).expect("Query failed");
-    if response.status().is_success() {
-        let body_bytes = response.bytes().expect("Couldn't convert to bytes").to_vec();
-        let response_decoded = decode_bencoded_structure(body_bytes);
-        match response_decoded {
-            Ok(value) => {
-                println!("DEBUG: Object response --> {:?}", value.as_object().unwrap());
-                let peers = value.as_object()
-                    .expect("Unable to convert value to object")
-                    .get("peers")
-                    .expect("Unable to get peers");
-                let peers_string = peers.as_str().expect("Couldn't get peer string");
-                let peers_string_decoded = general_purpose::STANDARD.decode(peers_string).expect("Can't decode peers from hex");
-                // let peer_bytes = peers
-                //     .as_str()
-                //     .expect("Couldn't convert peers to string").as_bytes();
-                let peer_byte_array = peers_string_decoded.as_slice();
-                print_byte_array_peers(peer_byte_array);
-            }
-            Err(e) => {
-                eprintln!("Couldn't decode response: {}", e);
-            }
-        }
-    } else {
-        eprintln!("Bad response from client! {}", response.status());
-    }
-}
-
-pub fn read_torrent_file(bytes: Vec<u8>, command: Command) -> () {
-    let parsed_file = decode_bencoded_structure(bytes);
-
-    match parsed_file {
-        Ok(file) => {
-            let file_obj = file.as_object().expect("Unable to convert file to object");
-
-            let announce = file_obj
-                .get("announce")
-                .expect("Announce not found in parsed file")
-                .as_str()
-                .expect("Announce is not a string");
-
-            let info = file_obj
-                .get("info")
-                .expect("Info not found")
-                .as_object()
-                .expect("Info is not an object");
-
-            let length = info
-                .get("length")
-                .expect("Length not found")
-                .as_i64()
-                .expect("Length is not an integer");
-
-            let hashed_info = hash_info(info);
-
-            match command {
-                Command::Info => {
-                    println!("Tracker URL: {}", announce);
-                    println!("Length: {}", length);
-                    println!("Info Hash: {}", hashed_info);
-
-                    print_hash_pieces(info);
-                }
-                Command::Peers => {
-                    let length = info.get("length").expect("Length not present").as_i64().unwrap();
-                    let name = info.get("name").expect("Name not present").as_str().unwrap().to_string();
-                    println!("DEBUG: Name --> {}", name.clone());
-                    println!("DEBUG: Length --> {}", length.clone());
-                    println!("DEBUG: Info Hash --> {}", hashed_info.clone());
-                    tracker_url_request(announce, hashed_info, length as u64);
-                }
-                _ => {
-                    eprintln!("Nothing implemented here yet!");
-                }
-            }
-        }
-        Err(_) => {
-            eprintln!("Error parsing file");
         }
     }
 }
