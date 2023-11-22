@@ -83,7 +83,10 @@ fn main() {
                     eprintln!("Error: {}", err);
                 }
             },
-            Command::Handshake { file, string } => establish_peer_connection(file, string),
+            Command::Handshake { mut file, string } =>
+                if let Err(err) = establish_peer_connection(&mut file, string) {
+                    eprintln!("Error: {}", err);
+                }
         },
         _ => {}
     }

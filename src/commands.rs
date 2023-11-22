@@ -8,11 +8,40 @@ use crate::torrent::{
 use base64::engine::general_purpose;
 use base64::Engine;
 use std::fs::{File};
-use std::io::Read;
+use std::io::{Read, Write};
+use std::net::{SocketAddrV4, TcpStream};
 use anyhow::{Result, anyhow};
 
-pub fn establish_peer_connection(_file: File, _string: String) -> () {
-    unimplemented!("Not ready yet")
+pub fn establish_peer_connection(file: &mut File, string: String) -> Result<String> {
+    if let Ok(TorrentInfo(_, hashed_info, _)) = fetch_and_print_torrent_info(file, false) {
+        let peer_details: SocketAddrV4 = string.parse().expect("Couldn't parse IP/port from provided peer details");
+        println!("Peer details: {}", peer_details);
+        let mut handshake_message: Vec<u8> = Vec::new();
+        let raw_hashed_info = general_purpose::STANDARD
+            .decode(hashed_info)
+            .expect("Can't decode hashed info from hex");
+        let peer_id = "00112233445566778899";
+        let protocol_name = "BitTorrent protocol";
+
+        handshake_message.push(protocol_name.len() as u8);
+        handshake_message.extend_from_slice(protocol_name.as_bytes());
+        handshake_message.extend(std::iter::repeat(0).take(8));
+        handshake_message.extend(raw_hashed_info);
+        handshake_message.extend_from_slice(peer_id.as_bytes());
+
+        let mut stream = TcpStream::connect(peer_details)?;
+        let mut buffer = [0; 1024];
+
+        stream.write_all(&handshake_message)?;
+        let bytes_read = stream.read(&mut buffer)?;
+
+        println!("Peer response size {bytes_read}: {:?}", &buffer[..bytes_read]);
+
+        Ok(String::from(""))
+
+    } else {
+        Err(anyhow!("Error getting torrent file info"))
+    }
 }
 
 pub fn fetch_and_print_torrent_peers(file: &mut File) -> Result<Vec<u8>> {
