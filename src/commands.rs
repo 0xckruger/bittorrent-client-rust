@@ -34,7 +34,7 @@ pub fn establish_peer_connection(file: &mut File, string: String) -> Result<Stri
         let bytes_read = stream.read(&mut buffer)?;
 
         //println!("Peer response size {bytes_read}: {:?}", &buffer[..=bytes_read]);
-        let (left, right) = buffer[..bytes_read].split_at(bytes_read-20);
+        let (_, right) = buffer[..bytes_read].split_at(bytes_read-20);
         let hex_encoded_peer_id = hex::encode(right);
         println!("Peer ID: {}", hex_encoded_peer_id);
         Ok(hex_encoded_peer_id)
