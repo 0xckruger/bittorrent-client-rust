@@ -79,7 +79,6 @@ pub fn hash_info(info: &Map<String, Value>) -> String {
     let mut hasher = Sha1::new();
     hasher.update(&bencoded_info);
     let result = hasher.finalize();
-
     format!("{:x}", result)
 }
 

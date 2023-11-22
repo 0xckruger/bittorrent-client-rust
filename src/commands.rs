@@ -16,9 +16,7 @@ pub fn establish_peer_connection(file: &mut File, string: String) -> Result<Stri
     if let Ok(TorrentInfo(_, hashed_info, _)) = fetch_and_print_torrent_info(file, false) {
         let peer_details: SocketAddrV4 = string.parse().expect("Couldn't parse IP/port from provided peer details");
         let mut handshake_message: Vec<u8> = Vec::new();
-        let raw_hashed_info = general_purpose::STANDARD
-            .decode(hashed_info)
-            .expect("Can't decode hashed info from hex");
+        let raw_hashed_info = hex::decode(hashed_info).expect("Can't decode hashed info from hex");
         let peer_id = "00112233445566778899";
         let protocol_name = "BitTorrent protocol";
 
@@ -28,15 +26,18 @@ pub fn establish_peer_connection(file: &mut File, string: String) -> Result<Stri
         handshake_message.extend(raw_hashed_info);
         handshake_message.extend_from_slice(peer_id.as_bytes());
 
+
         let mut stream = TcpStream::connect(peer_details)?;
         let mut buffer = [0; 1024];
 
         stream.write_all(&handshake_message)?;
         let bytes_read = stream.read(&mut buffer)?;
 
-        println!("Peer response size {bytes_read}: {:?}", &buffer[..bytes_read]);
-
-        Ok(String::from(""))
+        //println!("Peer response size {bytes_read}: {:?}", &buffer[..=bytes_read]);
+        let (left, right) = buffer[..bytes_read].split_at(bytes_read-20);
+        let hex_encoded_peer_id = hex::encode(right);
+        println!("Peer ID: {}", hex_encoded_peer_id);
+        Ok(hex_encoded_peer_id)
 
     } else {
         Err(anyhow!("Error getting torrent file info"))
