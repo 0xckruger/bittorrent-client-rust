@@ -15,7 +15,6 @@ use anyhow::{Result, anyhow};
 pub fn establish_peer_connection(file: &mut File, string: String) -> Result<String> {
     if let Ok(TorrentInfo(_, hashed_info, _)) = fetch_and_print_torrent_info(file, false) {
         let peer_details: SocketAddrV4 = string.parse().expect("Couldn't parse IP/port from provided peer details");
-        println!("Peer details: {}", peer_details);
         let mut handshake_message: Vec<u8> = Vec::new();
         let raw_hashed_info = general_purpose::STANDARD
             .decode(hashed_info)
