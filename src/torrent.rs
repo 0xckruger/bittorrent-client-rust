@@ -1,3 +1,4 @@
+use std::net::SocketAddrV4;
 /// Helper functions for processing torrent files
 
 use base64::{engine::general_purpose, Engine as _};
@@ -133,16 +134,19 @@ pub fn percent_encode_hex(hex_string: String) -> String {
     percent_encoded_string
 }
 
-pub fn print_byte_array_peers(bytes: &[u8]) -> () {
+pub fn convert_byte_array_peers(bytes: &[u8]) -> Vec<SocketAddrV4> {
+    let mut peers_array: Vec<SocketAddrV4> = vec![];
     for group in bytes.chunks(6) {
-        print!("{}.{}.{}.{}", group[0], group[1], group[2], group[3]);
+        let ip = format!("{}.{}.{}.{}", group[0], group[1], group[2], group[3]);
         let port_bytes: &[u8] = &group[4..=5]; // Slice representing the 2-byte value
 
         if let Ok(port_array) = port_bytes.try_into() {
             let port_value = u16::from_be_bytes(port_array);
-            println!(":{}", port_value);
+            let address = format!("{}:{}", ip, port_value);
+            peers_array.push(address.parse().unwrap());
         } else {
             eprintln!("Invalid slice length");
         }
     }
+    peers_array
 }
